@@ -31,6 +31,9 @@ endif
 if CAIRO_CAN_TEST_GLITZ_AGL_SURFACE
 libcairoboilerplate_la_LIBADD += $(GLITZ_AGL_LIBS)
 endif
+if CAIRO_CAN_TEST_GLITZ_CGL_SURFACE
+libcairoboilerplate_la_LIBADD += $(GLITZ_CGL_LIBS)
+endif
 if CAIRO_CAN_TEST_GLITZ_EGL_SURFACE
 libcairoboilerplate_la_LIBADD += $(GLITZ_EGL_LIBS)
 endif

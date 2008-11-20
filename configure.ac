@@ -195,6 +195,8 @@ CAIRO_ENABLE_SURFACE_BACKEND(glitz, glitz, no, [
 if test "x$use_glitz" = "xyes";then
   PKG_CHECK_MODULES(GLITZ_AGL, glitz-agl >= $GLITZ_MIN_VERSION,
    [have_glitz_agl=yes], [have_glitz_agl=no; AC_MSG_RESULT(no)])
+  PKG_CHECK_MODULES(GLITZ_CGL, glitz-cgl >= $GLITZ_MIN_VERSION,
+   [have_glitz_cgl=yes], [have_glitz_cgl=no; AC_MSG_RESULT(no)])
   PKG_CHECK_MODULES(GLITZ_EGL, glitz-egl >= $GLITZ_MIN_VERSION,
    [have_glitz_egl=yes], [have_glitz_egl=no; AC_MSG_RESULT(no)])
   PKG_CHECK_MODULES(GLITZ_GLX, glitz-glx >= $GLITZ_MIN_VERSION,
@@ -204,6 +206,9 @@ if test "x$use_glitz" = "xyes";then
 
   if test "x$have_glitz_agl" = "xyes";then
     AC_DEFINE(CAIRO_CAN_TEST_GLITZ_AGL_SURFACE, 1, [define if glitz backend can be tested against agl])
+  fi
+  if test "x$have_glitz_cgl" = "xyes";then
+    AC_DEFINE(CAIRO_CAN_TEST_GLITZ_CGL_SURFACE, 1, [define if glitz backend can be tested against cgl])
   fi
   if test "x$have_glitz_egl" = "xyes";then
     AC_DEFINE(CAIRO_CAN_TEST_GLITZ_EGL_SURFACE, 1, [define if glitz backend can be tested against egl])
@@ -217,6 +222,7 @@ if test "x$use_glitz" = "xyes";then
 fi
 
 AM_CONDITIONAL(CAIRO_CAN_TEST_GLITZ_AGL_SURFACE, test "x$have_glitz_agl" = "xyes")
+AM_CONDITIONAL(CAIRO_CAN_TEST_GLITZ_CGL_SURFACE, test "x$have_glitz_cgl" = "xyes")
 AM_CONDITIONAL(CAIRO_CAN_TEST_GLITZ_EGL_SURFACE, test "x$have_glitz_egl" = "xyes")
 AM_CONDITIONAL(CAIRO_CAN_TEST_GLITZ_GLX_SURFACE, test "x$have_glitz_glx" = "xyes")
 AM_CONDITIONAL(CAIRO_CAN_TEST_GLITZ_WGL_SURFACE, test "x$have_glitz_wgl" = "xyes")

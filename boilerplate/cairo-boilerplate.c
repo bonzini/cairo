@@ -394,6 +394,26 @@ static cairo_boilerplate_target_t targets[] =
 	_cairo_boilerplate_glitz_agl_cleanup
     },
 #endif
+#if CAIRO_CAN_TEST_GLITZ_CGL_SURFACE
+    {
+	"glitz-cgl", "glitz", NULL,
+	CAIRO_SURFACE_TYPE_GLITZ, CAIRO_CONTENT_COLOR_ALPHA, 0,
+	_cairo_boilerplate_glitz_cgl_create_surface, NULL,
+	NULL,
+	_cairo_boilerplate_get_image_surface,
+	cairo_surface_write_to_png,
+	_cairo_boilerplate_glitz_cgl_cleanup
+    },
+    {
+	"glitz-cgl", "glitz", NULL,
+	CAIRO_SURFACE_TYPE_GLITZ, CAIRO_CONTENT_COLOR, 0,
+	_cairo_boilerplate_glitz_cgl_create_surface, NULL,
+	NULL,
+	_cairo_boilerplate_get_image_surface,
+	cairo_surface_write_to_png,
+	_cairo_boilerplate_glitz_cgl_cleanup
+    },
+#endif
 #if CAIRO_CAN_TEST_GLITZ_WGL_SURFACE
     {
 	"glitz-wgl", "glitz", NULL,

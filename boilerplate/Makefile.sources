@@ -27,6 +27,7 @@ cairo_boilerplate_directfb_sources = cairo-boilerplate-directfb.c
 cairo_boilerplate_glitz_private = cairo-boilerplate-glitz-private.h
 cairo_boilerplate_glitz_sources = \
 	cairo-boilerplate-glitz-agl.c \
+	cairo-boilerplate-glitz-cgl.c \
 	cairo-boilerplate-glitz-glx.c \
 	cairo-boilerplate-glitz-wgl.c \
 	$(NULL)
