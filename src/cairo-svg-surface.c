@@ -2440,6 +2440,7 @@ static const cairo_surface_backend_t cairo_svg_surface_backend = {
 	_cairo_svg_surface_fill,
 	_cairo_svg_surface_show_glyphs,
 	NULL, /* snapshot */
+        NULL, /* acquire_snapshot_image */
 	NULL, /* is_similar */
 	NULL, /* reset */
 	_cairo_svg_surface_fill_stroke

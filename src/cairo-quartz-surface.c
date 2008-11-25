@@ -813,7 +813,6 @@ _cairo_surface_to_cgimage (cairo_surface_t *source,
     cairo_surface_type_t stype = cairo_surface_get_type (source);
     cairo_image_surface_t *isurf;
     CGImageRef image;
-    void *image_extra;
 
     if (stype == CAIRO_SURFACE_TYPE_QUARTZ_IMAGE) {
 	cairo_quartz_image_surface_t *surface = (cairo_quartz_image_surface_t *) source;
@@ -835,40 +834,26 @@ _cairo_surface_to_cgimage (cairo_surface_t *source,
 	}
     }
 
-    if (stype != CAIRO_SURFACE_TYPE_IMAGE) {
-	status = _cairo_surface_acquire_source_image (source, &isurf, &image_extra);
-	if (status)
-	    return status;
-    } else {
-	isurf = (cairo_image_surface_t *) source;
-    }
+    source = _cairo_surface_acquire_snapshot_image (source);
+    if (source->status)
+	return source->status;
 
+    isurf = (cairo_image_surface_t *) source;
     if (isurf->width == 0 || isurf->height == 0) {
 	*image_out = NULL;
     } else {
-	cairo_image_surface_t *isurf_snap = NULL;
-	isurf_snap = (cairo_image_surface_t*) _cairo_surface_snapshot ((cairo_surface_t*) isurf);
-	if (isurf_snap == NULL)
-	    return CAIRO_STATUS_NO_MEMORY;
-
-	if (isurf_snap->base.type != CAIRO_SURFACE_TYPE_IMAGE)
-	    return CAIRO_STATUS_SURFACE_TYPE_MISMATCH;
-
-	image = _cairo_quartz_create_cgimage (isurf_snap->format,
-					      isurf_snap->width,
-					      isurf_snap->height,
-					      isurf_snap->stride,
-					      isurf_snap->data,
+	image = _cairo_quartz_create_cgimage (isurf->format,
+					      isurf->width,
+					      isurf->height,
+					      isurf->stride,
+					      isurf->data,
 					      TRUE,
 					      NULL,
 					      DataProviderReleaseCallback,
-					      isurf_snap);
+					      isurf);
 
 	*image_out = image;
     }
-
-    if ((cairo_surface_t*) isurf != source)
-	_cairo_surface_release_source_image (source, isurf, image_extra);
 
     return status;
 }
@@ -2475,6 +2460,7 @@ static const struct _cairo_surface_backend cairo_quartz_surface_backend = {
 #endif
 
     _cairo_quartz_surface_snapshot,
+    _cairo_quartz_surface_snapshot, /* acquire_snapshot_image */
     NULL, /* is_similar */
     NULL, /* reset */
     NULL  /* fill_stroke */

@@ -208,6 +208,27 @@ _cairo_meta_surface_acquire_source_image (void			 *abstract_surface,
     return status;
 }
 
+static cairo_surface_t *
+_cairo_meta_surface_acquire_snapshot_image (void *abstract_surface)
+{
+    cairo_status_t status;
+    cairo_meta_surface_t *surface = abstract_surface;
+    cairo_surface_t *image;
+
+    image = _cairo_image_surface_create_with_content (surface->content,
+						      surface->width_pixels,
+						      surface->height_pixels);
+
+    status = _cairo_meta_surface_replay (&surface->base, image);
+    if (status) {
+	cairo_surface_destroy (image);
+	return _cairo_surface_create_in_error (status);
+    }
+
+    image->is_snapshot = TRUE;
+    return image;
+}
+
 static void
 _cairo_meta_surface_release_source_image (void			*abstract_surface,
 					  cairo_image_surface_t	*image,
@@ -673,6 +694,7 @@ static const cairo_surface_backend_t cairo_meta_surface_backend = {
     NULL,
 
     _cairo_meta_surface_snapshot,
+    _cairo_meta_surface_acquire_snapshot_image,
 
     NULL, /* is_similar */
     NULL, /* reset */

@@ -622,8 +622,8 @@ _cairo_xcb_surface_snapshot (void *abstract_surface)
     if (status)
         return _cairo_surface_create_in_error (status);
 
-    image->is_snapshot = TRUE;
-    return image;
+    image->base.is_snapshot = TRUE;
+    return &image->base;
 }
 
 static void
@@ -1715,6 +1715,7 @@ static const cairo_surface_backend_t cairo_xcb_surface_backend = {
     NULL, /* fill */
     _cairo_xcb_surface_show_glyphs,
     _cairo_xcb_surface_snapshot,
+    _cairo_xcb_surface_snapshot, /* acquire_snapshot_image */
 
     _cairo_xcb_surface_is_similar,
 

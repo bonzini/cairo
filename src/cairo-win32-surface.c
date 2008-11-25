@@ -2001,6 +2001,7 @@ static const cairo_surface_backend_t cairo_win32_surface_backend = {
     _cairo_win32_surface_show_glyphs,
 
     NULL,  /* snapshot */
+    NULL, /* acquire_snapshot_image */
     _cairo_win32_surface_is_similar,
 
     _cairo_win32_surface_reset

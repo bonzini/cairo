@@ -806,6 +806,9 @@ struct _cairo_surface_backend {
     cairo_surface_t *
     (*snapshot)			(void			*surface);
 
+    cairo_surface_t *
+    (*acquire_snapshot_image)	(void			*surface);
+
     cairo_bool_t
     (*is_similar)		(void			*surface_a,
 	                         void			*surface_b,
@@ -1973,6 +1976,9 @@ _cairo_surface_clone_similar (cairo_surface_t  *surface,
 			      int              *clone_offset_x,
 			      int              *clone_offset_y,
 			      cairo_surface_t **clone_out);
+
+cairo_private cairo_surface_t *
+_cairo_surface_acquire_snapshot_image (cairo_surface_t *surface);
 
 cairo_private cairo_surface_t *
 _cairo_surface_snapshot (cairo_surface_t *surface);

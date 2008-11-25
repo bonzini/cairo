@@ -1383,6 +1383,39 @@ _cairo_surface_clone_similar (cairo_surface_t  *surface,
 #include "cairo-meta-surface-private.h"
 
 /**
+ * _cairo_surface_acquire_snapshot_image
+ * @surface: a #cairo_surface_t
+ *
+ * Make an immutable image copy of @surface. It is an error to call a
+ * surface-modifying function on the result of this function.
+ *
+ * The caller owns the return value and should call
+ * cairo_surface_destroy() when finished with it. This function will not
+ * return %NULL, but will return a nil surface instead.
+ *
+ * Return value: The snapshotted image surface.
+ **/
+cairo_surface_t *
+_cairo_surface_acquire_snapshot_image (cairo_surface_t *surface)
+{
+    cairo_surface_t *snapshot;
+    if (surface->status)
+	return _cairo_surface_create_in_error (surface->status);
+
+    if (surface->finished)
+	return _cairo_surface_create_in_error (_cairo_error (CAIRO_STATUS_SURFACE_FINISHED));
+
+    snapshot = NULL;
+    if (surface->backend->acquire_snapshot_image)
+	snapshot = surface->backend->acquire_snapshot_image (surface);
+
+    if (snapshot == NULL)
+	snapshot = _cairo_surface_fallback_snapshot (surface);
+
+    return snapshot;
+}
+
+/**
  * _cairo_surface_snapshot
  * @surface: a #cairo_surface_t
  *

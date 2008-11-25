@@ -92,7 +92,7 @@ struct _cairo_surface {
     unsigned int current_clip_serial;
 
     /* A "snapshot" surface is immutable. See _cairo_surface_snapshot. */
-    cairo_bool_t is_snapshot;
+    unsigned is_snapshot : 1;
 
     /*
      * Surface font options, falling back to backend's default options,

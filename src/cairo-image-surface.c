@@ -1516,6 +1516,7 @@ const cairo_surface_backend_t _cairo_image_surface_backend = {
     NULL, /* fill */
     NULL, /* show_glyphs */
     NULL, /* snapshot */
+    NULL, /* acquire_snapshot_image */
     NULL, /* is_similar */
 
     _cairo_image_surface_reset

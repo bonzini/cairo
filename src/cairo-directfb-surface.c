@@ -1841,6 +1841,7 @@ _cairo_directfb_surface_backend = {
         NULL, /* show_glyphs */
 #endif
         NULL, /* snapshot */
+        NULL, /* acquire_snapshot_image */
         _cairo_directfb_surface_is_similar,
         NULL /* reset */
 };

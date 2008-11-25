@@ -2446,7 +2446,8 @@ _cairo_script_surface_backend = {
     _cairo_script_surface_fill,
     NULL,
 
-    NULL, //_cairo_script_surface_snapshot,
+    NULL, /* snapshot */
+    NULL, /* acquire_snapshot_image */
 
     NULL, /* is_similar */
     NULL, /* reset */

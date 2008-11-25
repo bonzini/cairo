@@ -322,6 +322,7 @@ static const cairo_surface_backend_t cairo_type3_glyph_surface_backend = {
     _cairo_type3_glyph_surface_fill,
     _cairo_type3_glyph_surface_show_glyphs,
     NULL, /* snapshot */
+    NULL  /* acquire_snapshot_image */
 };
 
 static void

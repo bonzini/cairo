@@ -663,6 +663,14 @@ _cairo_paginated_surface_snapshot (void *abstract_other)
     return _cairo_surface_snapshot (other->meta);
 }
 
+static cairo_surface_t *
+_cairo_paginated_surface_acquire_snapshot_image (void *abstract_other)
+{
+    cairo_paginated_surface_t *other = abstract_other;
+
+    return _cairo_surface_acquire_snapshot_image (other->meta);
+}
+
 static const cairo_surface_backend_t cairo_paginated_surface_backend = {
     CAIRO_INTERNAL_SURFACE_TYPE_PAGINATED,
     _cairo_paginated_surface_create_similar,
@@ -694,6 +702,7 @@ static const cairo_surface_backend_t cairo_paginated_surface_backend = {
     _cairo_paginated_surface_fill,
     NULL, /* show_glyphs */
     _cairo_paginated_surface_snapshot,
+    _cairo_paginated_surface_acquire_snapshot_image,
     NULL, /* is_similar */
     NULL, /* reset */
     NULL, /* fill_stroke */

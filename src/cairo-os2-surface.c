@@ -1339,5 +1339,6 @@ static const cairo_surface_backend_t cairo_os2_surface_backend = {
     NULL, /* stroke */
     NULL, /* fill */
     NULL, /* show_glyphs */
-    NULL  /* snapshot */
+    NULL, /* snapshot */
+    NULL  /* acquire_snapshot_image */
 };

@@ -5442,6 +5442,7 @@ static const cairo_surface_backend_t cairo_pdf_surface_backend = {
     _cairo_pdf_surface_fill,
     NULL, /* show_glyphs */
     NULL, /* snapshot */
+    NULL, /* acquire_snapshot_image */
 
     NULL, /* is_compatible */
     NULL, /* reset */
