@@ -1104,6 +1104,21 @@ _cairo_xlib_surface_acquire_source_image (void                    *abstract_surf
     return CAIRO_STATUS_SUCCESS;
 }
 
+static cairo_surface_t *
+_cairo_xlib_surface_snapshot (void *abstract_surface)
+{
+    cairo_xlib_surface_t *surface = abstract_surface;
+    cairo_image_surface_t *image;
+    cairo_status_t status;
+ 
+    status = _get_image_surface (surface, NULL, &image, NULL);
+    if (status)
+        return _cairo_surface_create_in_error (status);
+
+    image->is_snapshot = TRUE;
+    return image;
+}
+
 static void
 _cairo_xlib_surface_release_source_image (void                   *abstract_surface,
 					  cairo_image_surface_t  *image,
@@ -2463,7 +2478,7 @@ static const cairo_surface_backend_t cairo_xlib_surface_backend = {
     NULL, /* stroke */
     NULL, /* fill */
     _cairo_xlib_surface_show_glyphs,
-    NULL, /* snapshot */
+    _cairo_xlib_surface_snapshot,
     _cairo_xlib_surface_is_similar,
     _cairo_xlib_surface_reset,
     NULL, /* fill_stroke */
