@@ -807,7 +807,8 @@ DataProviderReleaseCallback (void *info, const void *data, size_t size)
 
 static cairo_status_t
 _cairo_surface_to_cgimage (cairo_surface_t *source,
-			   CGImageRef *image_out)
+			   CGImageRef *image_out,
+			   cairo_bool_t	snapshot)
 {
     cairo_status_t status = CAIRO_STATUS_SUCCESS;
     cairo_surface_type_t stype = cairo_surface_get_type (source);
@@ -834,9 +835,12 @@ _cairo_surface_to_cgimage (cairo_surface_t *source,
 	}
     }
 
-    source = _cairo_surface_acquire_snapshot_image (source);
-    if (source->status)
-	return source->status;
+    if (snapshot || stype != CAIRO_SURFACE_TYPE_IMAGE) {
+        source = _cairo_surface_acquire_snapshot_image (source);
+        if (source->status)
+	    return source->status;
+    } else
+        cairo_surface_reference (source);
 
     isurf = (cairo_image_surface_t *) source;
     if (isurf->width == 0 || isurf->height == 0) {
@@ -940,7 +944,7 @@ _cairo_quartz_cairo_repeating_surface_pattern_to_quartz (cairo_quartz_surface_t 
     if (status)
 	return status;
 
-    status = _cairo_surface_to_cgimage (pat_surf, &image);
+    status = _cairo_surface_to_cgimage (pat_surf, &image, TRUE);
     if (status != CAIRO_STATUS_SUCCESS)
 	return CAIRO_INT_STATUS_UNSUPPORTED;
 
@@ -1067,7 +1071,8 @@ _cairo_quartz_setup_fallback_source (cairo_quartz_surface_t *surface,
     cairo_paint (fallback_cr);
     cairo_destroy (fallback_cr);
 
-    status = _cairo_surface_to_cgimage (fallback, &img);
+    /* Do not snapshot the surface, it will never be changed.  */
+    status = _cairo_surface_to_cgimage (fallback, &img, FALSE);
     if (status == CAIRO_STATUS_SUCCESS && img == NULL)
 	return DO_NOTHING;
     if (status)
@@ -1236,7 +1241,7 @@ _cairo_quartz_setup_source (cairo_quartz_surface_t *surface,
 	CGRect srcRect;
 	cairo_fixed_t fw, fh;
 
-	status = _cairo_surface_to_cgimage (pat_surf, &img);
+	status = _cairo_surface_to_cgimage (pat_surf, &img, TRUE);
 	if (status == CAIRO_STATUS_SUCCESS && img == NULL)
 	    return DO_NOTHING;
 	if (status)
@@ -1642,7 +1647,8 @@ _cairo_quartz_surface_clone_similar (void *abstract_surface,
 	}
     }
 
-    status = _cairo_surface_to_cgimage (src, &quartz_image);
+    /* Do not snapshot the image, we delete it as soon as we have drawn it.  */
+    status = _cairo_surface_to_cgimage (src, &quartz_image, FALSE);
     if (status)
 	return CAIRO_INT_STATUS_UNSUPPORTED;
 
@@ -2232,7 +2238,8 @@ _cairo_quartz_surface_mask_with_surface (cairo_quartz_surface_t *surface,
     if (mask_extents.width == 0 || mask_extents.height == 0)
 	return CAIRO_STATUS_SUCCESS;
 
-    status = _cairo_surface_to_cgimage (pat_surf, &img);
+    /* Do not snapshot the image, we delete it as soon as we have drawn it.  */
+    status = _cairo_surface_to_cgimage (pat_surf, &img, FALSE);
     if (status == CAIRO_STATUS_SUCCESS && img == NULL)
 	return CAIRO_STATUS_SUCCESS;
     if (status)
