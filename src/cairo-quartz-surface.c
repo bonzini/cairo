@@ -806,8 +806,7 @@ DataProviderReleaseCallback (void *info, const void *data, size_t size)
 }
 
 static cairo_status_t
-_cairo_surface_to_cgimage (cairo_surface_t *target,
-			   cairo_surface_t *source,
+_cairo_surface_to_cgimage (cairo_surface_t *source,
 			   CGImageRef *image_out)
 {
     cairo_status_t status = CAIRO_STATUS_SUCCESS;
@@ -956,7 +955,7 @@ _cairo_quartz_cairo_repeating_surface_pattern_to_quartz (cairo_quartz_surface_t 
     if (status)
 	return status;
 
-    status = _cairo_surface_to_cgimage ((cairo_surface_t*) dest, pat_surf, &image);
+    status = _cairo_surface_to_cgimage (pat_surf, &image);
     if (status != CAIRO_STATUS_SUCCESS)
 	return CAIRO_INT_STATUS_UNSUPPORTED;
 
@@ -1083,7 +1082,7 @@ _cairo_quartz_setup_fallback_source (cairo_quartz_surface_t *surface,
     cairo_paint (fallback_cr);
     cairo_destroy (fallback_cr);
 
-    status = _cairo_surface_to_cgimage ((cairo_surface_t*) surface, fallback, &img);
+    status = _cairo_surface_to_cgimage (fallback, &img);
     if (status == CAIRO_STATUS_SUCCESS && img == NULL)
 	return DO_NOTHING;
     if (status)
@@ -1252,7 +1251,7 @@ _cairo_quartz_setup_source (cairo_quartz_surface_t *surface,
 	CGRect srcRect;
 	cairo_fixed_t fw, fh;
 
-	status = _cairo_surface_to_cgimage ((cairo_surface_t *) surface, pat_surf, &img);
+	status = _cairo_surface_to_cgimage (pat_surf, &img);
 	if (status == CAIRO_STATUS_SUCCESS && img == NULL)
 	    return DO_NOTHING;
 	if (status)
@@ -1640,7 +1639,7 @@ _cairo_quartz_surface_clone_similar (void *abstract_surface,
 	}
     }
 
-    status = _cairo_surface_to_cgimage ((cairo_surface_t*) abstract_surface, src, &quartz_image);
+    status = _cairo_surface_to_cgimage (src, &quartz_image);
     if (status)
 	return CAIRO_INT_STATUS_UNSUPPORTED;
 
@@ -2230,7 +2229,7 @@ _cairo_quartz_surface_mask_with_surface (cairo_quartz_surface_t *surface,
     if (mask_extents.width == 0 || mask_extents.height == 0)
 	return CAIRO_STATUS_SUCCESS;
 
-    status = _cairo_surface_to_cgimage ((cairo_surface_t *) surface, pat_surf, &img);
+    status = _cairo_surface_to_cgimage (pat_surf, &img);
     if (status == CAIRO_STATUS_SUCCESS && img == NULL)
 	return CAIRO_STATUS_SUCCESS;
     if (status)
