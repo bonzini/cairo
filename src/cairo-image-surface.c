@@ -124,6 +124,10 @@ _cairo_content_from_pixman_format (pixman_format_code_t pixman_format)
     return CAIRO_CONTENT_COLOR_ALPHA;
 }
 
+
+static cairo_bool_t
+_cairo_image_cache_keys_equal (const void *abstract_key_a, const void *abstract_key_b);
+
 cairo_surface_t *
 _cairo_image_surface_create_for_pixman_image (pixman_image_t		*pixman_image,
 					      pixman_format_code_t	 pixman_format)
@@ -145,6 +149,7 @@ _cairo_image_surface_create_for_pixman_image (pixman_image_t		*pixman_image,
     surface->owns_data = FALSE;
     surface->has_clip = FALSE;
     surface->transparency = CAIRO_IMAGE_UNKNOWN;
+    surface->cache = _cairo_hash_table_create (_cairo_image_cache_keys_equal);
 
     surface->width = pixman_image_get_width (pixman_image);
     surface->height = pixman_image_get_height (pixman_image);
@@ -647,6 +652,222 @@ cairo_image_surface_get_stride (cairo_surface_t *surface)
 }
 slim_hidden_def (cairo_image_surface_get_stride);
 
+
+typedef struct _cairo_image_cache {
+    /* hash_entry must be first */
+    cairo_hash_entry_t hash_entry;
+    cairo_bool_t dirty;
+    void *data;
+    cairo_image_cache_rebuild_func rebuild_func;
+    cairo_image_cache_destroy_func destroy_func;
+} cairo_image_cache_entry_t;
+
+static cairo_bool_t
+_cairo_image_cache_keys_equal (const void *abstract_key_a, const void *abstract_key_b)
+{
+    const cairo_image_cache_entry_t *key_a = abstract_key_a;
+    const cairo_image_cache_entry_t *key_b = abstract_key_b;
+
+    return key_a->hash_entry.hash == key_b->hash_entry.hash;
+}
+
+/* Bridge the semantics of the cache rebuild function with those
+   of _cairo_image_surface_get_cache.  */
+static inline void *
+_cairo_image_cache_entry_get_data (cairo_surface_t *surface,
+				   cairo_image_cache_entry_t *entry,
+				   cairo_bool_t needed)
+{
+    cairo_image_surface_t *isurf = (cairo_image_surface_t *) surface;
+
+    assert (!isurf->cache_dirty);
+    if (entry->dirty) {
+	void *new_data = entry->rebuild_func (entry->data, needed, surface);
+
+	/* If new_data is NULL, the entry might be invalid now, don't touch it
+	   anymore!  */
+	if (new_data != NULL) {
+	    entry->data = new_data;
+	    entry->dirty = FALSE;
+	    isurf->cache_all_dirty = FALSE;
+        }
+	return new_data;
+    } else
+	return entry->data;
+}
+
+
+static void
+_cairo_image_cache_entry_insert (cairo_surface_t		*surface,
+				 int				key,
+				 void				*data,
+				 cairo_image_cache_entry_t	*entry,
+				 cairo_image_cache_rebuild_func rebuild_func,
+				 cairo_image_cache_destroy_func destroy_func)
+{
+    cairo_image_surface_t *isurf = (cairo_image_surface_t *) surface;
+    cairo_image_cache_entry_t *the_entry;
+    assert (rebuild_func);
+    assert (destroy_func);
+    assert (data);
+
+    if (entry == NULL)
+	the_entry = malloc (sizeof (cairo_image_cache_entry_t));
+    else
+	the_entry = entry;
+
+    isurf->cache_all_dirty = FALSE;
+    the_entry->dirty = FALSE;
+    the_entry->data = data;
+    the_entry->rebuild_func = rebuild_func;
+    the_entry->destroy_func = destroy_func;
+    if (entry == NULL) {
+	the_entry->hash_entry.hash = key;
+	_cairo_hash_table_insert (isurf->cache, &the_entry->hash_entry);
+    }
+}
+
+
+/* Also called via _cairo_hash_table_foreach.  */
+static void
+_cairo_image_cache_entry_free (void *abstract_entry, void *closure)
+{
+    cairo_image_cache_entry_t *entry = abstract_entry;
+    if (entry->data != NULL) {
+        entry->destroy_func (entry->data);
+        entry->data = NULL;
+    }
+    _cairo_hash_table_remove (closure, &entry->hash_entry);
+    free (entry);
+}
+
+
+/* Called via _cairo_hash_table_foreach.  */
+static void
+_cairo_image_cache_entry_mark_dirty (void *abstract_entry, void *closure)
+{
+    cairo_image_cache_entry_t *entry = abstract_entry;
+    entry->dirty = TRUE;
+}
+
+
+/**
+ * _cairo_image_surface_get_cache:
+ * @surface: a #cairo_surface_t for an image surface.
+ * @key: the cache key.
+ * @rebuild_func: the function to use to build the cached representation
+ * if it is absent or invalid.
+ * @destroy_func: the function to use to destroy the cached representation
+ * when it will be discarded.
+ *
+ * If the image is cacheable, looks up the cached representation with the
+ * given key and returns it, possibly after refreshing it if it was dirty.
+ * If there is no up-to-date cached representation corresponding to the
+ * key, the rebuild function is called right away to try building one.  The
+ * rebuild function can fail by returning %NULL, preventing the creation
+ * of a new cache entry.
+ *
+ * Otherwise the returned value is stored in the cache for an indeterminate
+ * amount of time.  Whenever needed, the @rebuild_func will be called again
+ * with a non-%NULL first parameter to refresh the representation, and the
+ * @destroy_func will finally be called to free resources associated with it.
+ *
+ * Return value: the cached representation of the surface, or
+ * %NULL if the surface is not cacheable, or if no valid representation
+ * was found in the cache and the @rebuild_func could not create one.
+ **/
+void *
+_cairo_image_surface_get_cache (cairo_surface_t			*surface,
+				int				 key,
+				cairo_image_cache_rebuild_func   rebuild_func,
+				cairo_image_cache_destroy_func   destroy_func)
+{
+    cairo_image_surface_t *isurf = (cairo_image_surface_t *) surface;
+    cairo_hash_entry_t lookup_key = { key };
+    cairo_image_cache_entry_t *entry;
+
+    entry = _cairo_hash_table_lookup (isurf->cache, &lookup_key);
+    if (entry == NULL && rebuild_func == NULL)
+	return NULL;
+
+    if (isurf->cache_dirty && !isurf->cache_all_dirty) {
+	_cairo_hash_table_foreach (isurf->cache,
+				   _cairo_image_cache_entry_mark_dirty,
+				   surface);
+	isurf->cache_all_dirty = TRUE;
+    }
+    isurf->cache_dirty = FALSE;
+
+    if (entry == NULL) {
+	void *data = rebuild_func (NULL, TRUE, surface);
+	if (data != NULL)
+	    _cairo_image_cache_entry_insert (surface, key, data, entry,
+					     rebuild_func, destroy_func);
+	return data;
+    } else
+        return _cairo_image_cache_entry_get_data (surface, entry, TRUE);
+}
+
+
+/**
+ * _cairo_image_surface_set_cache:
+ * @surface: a #cairo_surface_t for an image surface.
+ * @key: the cache key.
+ * @data: the cached representation to be stored, or %NULL to free the
+ * resources attached to it.
+ * @rebuild_func: the function that will be used to refresh the cached
+ * representation if it is absent or invalid (only used if @data is .
+ * @destroy_func: the function to use to destroy the cached representation
+ * when it will be discarded.
+ *
+ * If the image is cacheable, replaces the cached representation with the
+ * given key (if present) with @data, or flushes the cached representation
+ * if @data is %NULL.
+ *
+ * The existing representation is not destroyed.  If this is desired,
+ * you should first flush the entry (calling this function with @data
+ * set to %NULL) and then set it again.
+ *
+ * You do not need this function in a @rebuild_func.  In that context
+ * you can replace an existing entry just by returning the new entry
+ * from the @rebuild_func (note that the old entry must be destroyed
+ * explicitly in that case too).
+ **/
+void
+_cairo_image_surface_set_cache (cairo_surface_t			*surface,
+				int				 key,
+				void				*data,
+				cairo_image_cache_rebuild_func   rebuild_func,
+				cairo_image_cache_destroy_func   destroy_func)
+{
+    cairo_image_surface_t *isurf = (cairo_image_surface_t *) surface;
+    cairo_hash_entry_t lookup_key = { key };
+    cairo_image_cache_entry_t *entry;
+
+    entry = _cairo_hash_table_lookup (isurf->cache, &lookup_key);
+    if (data != NULL) {
+	_cairo_image_cache_entry_insert (surface, key, data, entry,
+					 rebuild_func, destroy_func);
+    } else {
+	if (entry != NULL)
+	    _cairo_image_cache_entry_free (entry, isurf->cache);
+    }
+}
+ 
+static cairo_status_t
+_cairo_image_surface_mark_dirty_rectangle (void *surface,
+                                           int   x,
+                                           int   y,
+                                           int   width,
+                                           int   height)
+{
+    cairo_image_surface_t *isurf = (cairo_image_surface_t *) surface;
+    isurf->cache_dirty = TRUE;
+    return CAIRO_STATUS_SUCCESS;
+}
+
+
+
 cairo_format_t
 _cairo_format_from_content (cairo_content_t content)
 {
@@ -699,15 +920,17 @@ _cairo_format_bits_per_pixel (cairo_format_t format)
 }
 
 static cairo_surface_t *
-_cairo_image_surface_create_similar (void	       *abstract_src,
+_cairo_image_surface_create_similar (void	       *asurface,
 				     cairo_content_t	content,
 				     int		width,
 				     int		height)
 {
+    cairo_surface_t *surf;
     assert (CAIRO_CONTENT_VALID (content));
 
-    return _cairo_image_surface_create_with_content (content,
-						     width, height);
+    surf = _cairo_image_surface_create_with_content (content, width, height);
+
+    return surf;
 }
 
 static cairo_status_t
@@ -718,6 +941,14 @@ _cairo_image_surface_finish (void *abstract_surface)
     if (surface->pixman_image) {
 	pixman_image_unref (surface->pixman_image);
 	surface->pixman_image = NULL;
+    }
+
+    if (surface->cache) {
+        _cairo_hash_table_foreach (surface->cache,
+                                   _cairo_image_cache_entry_free,
+                                   surface->cache);
+        _cairo_hash_table_destroy (surface->cache);
+        surface->cache = NULL;
     }
 
     if (surface->owns_data) {
@@ -1024,6 +1255,7 @@ _cairo_image_surface_composite (cairo_operator_t	op,
 	_cairo_pattern_release_surface (mask_pattern, &mask->base, &mask_attr);
 
     _cairo_pattern_release_surface (src_pattern, &src->base, &src_attr);
+    dst->cache_dirty = TRUE;
 
     return status;
 }
@@ -1072,6 +1304,7 @@ _cairo_image_surface_fill_rectangles (void		      *abstract_surface,
 	status = _cairo_error (CAIRO_STATUS_NO_MEMORY);
     }
 
+    surface->cache_dirty = TRUE;
     if (pixman_rects != stack_rects)
 	free (pixman_rects);
 
@@ -1200,6 +1433,7 @@ _cairo_image_surface_composite_trapezoids (cairo_operator_t	op,
 								 0, 0,
 								 dst_x, dst_y, width, height);
     cairo_surface_destroy (&mask->base);
+    dst->cache_dirty = TRUE;
 
  CLEANUP_SOURCE:
     _cairo_pattern_release_surface (pattern, &src->base, &attributes);
@@ -1506,7 +1740,7 @@ const cairo_surface_backend_t _cairo_image_surface_backend = {
     NULL, /* old_show_glyphs */
     _cairo_image_surface_get_font_options,
     NULL, /* flush */
-    NULL, /* mark_dirty_rectangle */
+    _cairo_image_surface_mark_dirty_rectangle, /* mark_dirty_rectangle */
     NULL, /* font_fini */
     NULL, /* glyph_fini */
 

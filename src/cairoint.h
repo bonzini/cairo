@@ -881,6 +881,16 @@ struct _cairo_image_surface {
     unsigned owns_data : 1;
     unsigned has_clip : 1;
     unsigned transparency : 2;
+
+    /* cache_dirty overrides the dirty field of every cache entry.
+       cache_all_dirty means that all the entries are already marked dirty.  */
+    unsigned cache_dirty : 1;
+    unsigned cache_all_dirty : 1;
+
+    /* When this is exhausted, the next bitfield will go after the cache.  */
+    unsigned unused : 27;
+
+    cairo_hash_table_t *cache;
 };
 
 extern const cairo_private cairo_surface_backend_t _cairo_image_surface_backend;
@@ -2126,6 +2136,12 @@ _cairo_surface_has_device_transform (cairo_surface_t *surface);
 						      CAIRO_CONTENT_COLOR_ALPHA))\
 				       == 0))
 
+typedef void *(*cairo_image_cache_rebuild_func) (void			*old,
+                                                 cairo_bool_t		 needed,
+                                                 cairo_surface_t	*src);
+
+typedef void (*cairo_image_cache_destroy_func) (void			*data);
+
 cairo_private int
 _cairo_format_bits_per_pixel (cairo_format_t format) cairo_pure;
 
@@ -2138,6 +2154,19 @@ _cairo_content_from_format (cairo_format_t format) cairo_pure;
 cairo_private cairo_surface_t *
 _cairo_image_surface_create_for_pixman_image (pixman_image_t		*pixman_image,
 					      pixman_format_code_t	 pixman_format);
+
+cairo_private void *
+_cairo_image_surface_get_cache (cairo_surface_t			*surf,
+                                int				 key,
+                                cairo_image_cache_rebuild_func	 rebuild_func,
+                                cairo_image_cache_destroy_func	 destroy_func);
+
+cairo_private void
+_cairo_image_surface_set_cache (cairo_surface_t			*surf,
+                                int				 key,
+				void				*data,
+                                cairo_image_cache_rebuild_func	 rebuild_func,
+                                cairo_image_cache_destroy_func	 destroy_func);
 
 cairo_private cairo_bool_t
 _pixman_format_from_masks (cairo_format_masks_t *masks,

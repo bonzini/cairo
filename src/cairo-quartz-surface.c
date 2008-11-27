@@ -65,6 +65,9 @@
 
 #define IS_EMPTY(s) ((s)->extents.width == 0 || (s)->extents.height == 0)
 
+/* If an image has too few pixels, skip the caching.  */
+#define LARGE_IMAGE 1500 /* bytes */
+
 /* This method is private, but it exists.  Its params are are exposed
  * as args to the NS* method, but not as CG.
  */
@@ -806,54 +809,118 @@ DataProviderReleaseCallback (void *info, const void *data, size_t size)
 }
 
 static cairo_status_t
-_cairo_surface_to_cgimage (cairo_surface_t *source,
-			   CGImageRef *image_out,
-			   cairo_bool_t	snapshot)
+_cgimage_rebuild (cairo_surface_t	*surface,
+		  CGImageRef		*image_out,
+		  cairo_bool_t		 snapshot)
 {
-    cairo_status_t status = CAIRO_STATUS_SUCCESS;
-    cairo_surface_type_t stype = cairo_surface_get_type (source);
     cairo_image_surface_t *isurf;
-    CGImageRef image;
+    CGImageRef newImage = NULL;
 
-    if (stype == CAIRO_SURFACE_TYPE_QUARTZ) {
-	cairo_quartz_surface_t *surface = (cairo_quartz_surface_t *) source;
-	if (IS_EMPTY(surface)) {
-	    *image_out = NULL;
-	    return CAIRO_STATUS_SUCCESS;
-	}
+    /* The reference will be released by the ReleaseCallback.  */
+    if (snapshot || cairo_surface_get_type (surface) != CAIRO_SURFACE_TYPE_IMAGE)
+        surface = _cairo_surface_acquire_snapshot_image (surface);
+    else
+        cairo_surface_reference (surface);
 
-	if (_cairo_quartz_is_cgcontext_bitmap_context (surface->cgContext)) {
-	    *image_out = CGBitmapContextCreateImage (surface->cgContext);
-	    if (*image_out)
-		return CAIRO_STATUS_SUCCESS;
-	}
-    }
+    isurf = (cairo_image_surface_t*) surface;
+    if (isurf == NULL)
+	return CAIRO_STATUS_NO_MEMORY;
 
-    if (snapshot || stype != CAIRO_SURFACE_TYPE_IMAGE) {
-        source = _cairo_surface_acquire_snapshot_image (source);
-        if (source->status)
-	    return source->status;
-    } else
-        cairo_surface_reference (source);
-
-    isurf = (cairo_image_surface_t *) source;
     if (isurf->width == 0 || isurf->height == 0) {
 	*image_out = NULL;
-    } else {
-	image = _cairo_quartz_create_cgimage (isurf->format,
-					      isurf->width,
-					      isurf->height,
-					      isurf->stride,
-					      isurf->data,
-					      TRUE,
-					      NULL,
-					      DataProviderReleaseCallback,
-					      isurf);
-
-	*image_out = image;
+        return CAIRO_STATUS_SUCCESS;
     }
 
-    return status;
+    if (!_cairo_quartz_verify_surface_size(isurf->width, isurf->height))
+        return CAIRO_STATUS_NO_MEMORY;
+
+    if (isurf->format != CAIRO_FORMAT_ARGB32 && isurf->format != CAIRO_FORMAT_RGB24)
+        return CAIRO_INT_STATUS_UNSUPPORTED;
+
+    newImage = _cairo_quartz_create_cgimage (isurf->format,
+					     isurf->width,
+					     isurf->height,
+					     isurf->stride,
+					     isurf->data,
+					     TRUE,
+					     NULL,
+					     DataProviderReleaseCallback,
+					     isurf);
+
+    if (!newImage)
+	return CAIRO_STATUS_NO_MEMORY;
+
+    *image_out = newImage;
+    return CAIRO_STATUS_SUCCESS;
+}
+
+static void *
+cgimage_rebuild (void *old,
+		 cairo_bool_t needed,
+		 cairo_surface_t *isurf)
+{
+    CGImageRef newImage;
+    if (!needed)
+        return NULL;
+
+    if (_cgimage_rebuild (isurf, &newImage, TRUE) != CAIRO_STATUS_SUCCESS)
+	return NULL;
+
+    /* Also calls the ReleaseCallback */
+    if (old)
+        CGImageRelease ((CGImageRef) old);
+
+    return newImage;
+}
+
+static inline cairo_bool_t
+_cairo_surface_cacheable (cairo_surface_t      *surface)
+{
+    cairo_image_surface_t *isurf = (cairo_image_surface_t*) surface;
+    return isurf->height * isurf->stride >= LARGE_IMAGE;
+}
+
+static cairo_status_t
+_cairo_surface_to_cgimage (cairo_surface_t	*source,
+			   CGImageRef		*image_out,
+			   cairo_bool_t		 snapshot)
+{
+    cairo_surface_type_t stype = cairo_surface_get_type (source);
+    CGImageRef image;
+
+    if (stype == CAIRO_SURFACE_TYPE_IMAGE) {
+	/* Do not go through the cache: 1) if we know the surface is used
+	   once only; 2) if the surface is small.  */
+	if (snapshot && _cairo_surface_cacheable (source)) {
+	    *image_out = _cairo_image_surface_get_cache (source,
+						         CAIRO_SURFACE_TYPE_QUARTZ,
+						         cgimage_rebuild,
+						         (cairo_image_cache_destroy_func) CGImageRelease);
+	    if (*image_out) {
+                *image_out = CGImageRetain (*image_out);
+                return CAIRO_STATUS_SUCCESS;
+	    }
+        }
+    }
+
+    else {
+	if (stype == CAIRO_SURFACE_TYPE_QUARTZ) {
+	    cairo_quartz_surface_t *surface = (cairo_quartz_surface_t *) source;
+	    if (IS_EMPTY(surface)) {
+	        *image_out = NULL;
+	        return CAIRO_STATUS_SUCCESS;
+	    }
+	    if (_cairo_quartz_is_cgcontext_bitmap_context (surface->cgContext)) {
+	        *image_out = CGBitmapContextCreateImage (surface->cgContext);
+	        if (*image_out)
+		    return CAIRO_STATUS_SUCCESS;
+	    }
+        }
+
+	snapshot = TRUE;
+    }
+
+    return _cgimage_rebuild (source, image_out, snapshot);
 }
 
 /* Generic #cairo_pattern_t -> CGPattern function */
