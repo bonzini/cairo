@@ -55,20 +55,24 @@ _cairo_glitz_surface_finish (void *abstract_surface)
     return CAIRO_STATUS_SUCCESS;
 }
 
-static glitz_format_name_t
-_glitz_format_from_content (cairo_content_t content)
+static glitz_format_t *
+_glitz_find_format_for_cairo_format (glitz_drawable_t *drawable,
+				     cairo_format_t format)
 {
-    switch (content) {
-    case CAIRO_CONTENT_COLOR:
-	return GLITZ_STANDARD_RGB24;
-    case CAIRO_CONTENT_ALPHA:
-	return GLITZ_STANDARD_A8;
-    case CAIRO_CONTENT_COLOR_ALPHA:
-	return GLITZ_STANDARD_ARGB32;
+    switch (format) {
+    case CAIRO_FORMAT_A1:
+    case CAIRO_FORMAT_A8:
+	return glitz_find_standard_format (drawable, GLITZ_STANDARD_A8);
+    case CAIRO_FORMAT_RGB24:
+	return glitz_find_standard_format (drawable, GLITZ_STANDARD_RGB24);
+    case CAIRO_FORMAT_ARGB32:
+	break;
+    default:
+        ASSERT_NOT_REACHED;
+	break;
     }
 
-    ASSERT_NOT_REACHED;
-    return GLITZ_STANDARD_ARGB32;
+    return glitz_find_standard_format (drawable, GLITZ_STANDARD_ARGB32);
 }
 
 static cairo_surface_t *
@@ -82,12 +86,11 @@ _cairo_glitz_surface_create_similar (void	    *abstract_src,
     glitz_drawable_t	  *drawable;
     glitz_surface_t	  *surface;
     glitz_format_t	  *gformat;
+    cairo_format_t	  format;
 
     drawable = glitz_surface_get_drawable (src->surface);
-
-    gformat =
-	glitz_find_standard_format (drawable,
-				    _glitz_format_from_content (content));
+    format = _cairo_format_from_content (content);
+    gformat = _glitz_find_format_for_cairo_format (drawable, format);
     if (!gformat)
 	return NULL;
 
@@ -249,7 +252,20 @@ _cairo_glitz_surface_set_image (void		      *abstract_surface,
     glitz_buffer_t	  *buffer;
     glitz_pixel_format_t  pf;
     cairo_format_masks_t  masks;
+    cairo_rectangle_int_t image_extent;
+    cairo_rectangle_int_t extent;
     char		  *data;
+
+    image_extent.x = 0;
+    image_extent.y = 0;
+    image_extent.width = image->width;
+    image_extent.height = image->height;
+    extent.x = src_x;
+    extent.y = src_y;
+    extent.width = width;
+    extent.height = height;
+    if (!_cairo_rectangle_intersect (&extent, &image_extent))
+	return CAIRO_STATUS_SUCCESS;
 
     _pixman_format_to_masks (image->pixman_format, &masks);
 
@@ -364,6 +380,97 @@ _cairo_glitz_surface_release_dest_image (void                    *abstract_surfa
     cairo_surface_destroy (&image->base);
 }
 
+static int
+_cairo_glitz_surface_check_cache (cairo_glitz_surface_t *target,
+			          cairo_surface_t *src,
+				  cairo_surface_t **clone_out)
+{
+    *clone_out = NULL;
+    if (!_cairo_surface_is_image (src))
+	return CAIRO_INT_STATUS_UNSUPPORTED;
+
+    *clone_out = _cairo_image_surface_get_cache (src, CAIRO_SURFACE_TYPE_GLITZ,
+						 NULL, NULL);
+
+    if (*clone_out != NULL) {
+	cairo_surface_t *clone = *clone_out;
+	cairo_glitz_surface_t *glitz_clone = (cairo_glitz_surface_t *) clone;
+	cairo_image_surface_t *image_src = (cairo_image_surface_t *) src;
+	glitz_drawable_t *drawable = glitz_surface_get_drawable (target->surface);
+
+	/* Check if the required drawable actually supports the format
+	   if it doesn't match the drawable in the cache.  */
+	if (glitz_surface_get_drawable (glitz_clone->surface) != drawable
+	    && _glitz_find_format_for_cairo_format (drawable,
+						    image_src->format) == NULL)
+	    return CAIRO_INT_STATUS_UNSUPPORTED;
+
+	cairo_surface_reference (clone);
+    }
+    return CAIRO_STATUS_SUCCESS;
+}
+
+static void *
+_cairo_glitz_surface_rebuild (void *old,
+			      cairo_bool_t needed,
+			      cairo_surface_t *src)
+{
+    cairo_image_surface_t *image_src = (cairo_image_surface_t *) src;
+    cairo_surface_t *glitz_surf = old;
+    cairo_status_t status;
+    int width, height;
+
+    if (!old || !needed)
+        return NULL;
+
+    width = image_src->width;
+    height = image_src->height;
+    status = _cairo_glitz_surface_set_image (glitz_surf, image_src,
+					     0, 0, width, height, 0, 0);
+    if (status)
+        return NULL;
+    else
+        return old;
+}
+
+
+static cairo_status_t
+_cairo_glitz_surface_from_image_surface (cairo_surface_t **clone_out,
+					 cairo_surface_t *src,
+					 cairo_surface_t *similar,
+					 int		 src_x,
+					 int		 src_y,
+					 int		 width,
+					 int		 height,
+					 cairo_bool_t	 set_cache)
+{
+    cairo_image_surface_t *image_src = (cairo_image_surface_t *) src;
+    cairo_surface_t	  *clone;
+    cairo_status_t	  status;
+
+    clone = _cairo_glitz_surface_create_similar (similar, src->content,
+						 width, height);
+    if (clone->status)
+	return clone->status;
+
+    status = _cairo_glitz_surface_set_image (clone, image_src,
+					     src_x, src_y, width, height,
+					     0, 0);
+    if (status) {
+	cairo_surface_destroy (clone);
+    } else {
+        if (set_cache) {
+            _cairo_image_surface_set_cache (src, CAIRO_SURFACE_TYPE_GLITZ,
+				            clone, _cairo_glitz_surface_rebuild,
+				            (cairo_image_cache_destroy_func) cairo_surface_destroy);
+	    cairo_surface_reference (clone);
+	}
+	*clone_out = clone;
+    }
+
+    return status;
+}
+
 static cairo_status_t
 _cairo_glitz_surface_clone_similar (void	    *abstract_surface,
 				    cairo_surface_t *src,
@@ -376,48 +483,60 @@ _cairo_glitz_surface_clone_similar (void	    *abstract_surface,
 				    cairo_surface_t **clone_out)
 {
     cairo_glitz_surface_t *surface = abstract_surface;
-    cairo_glitz_surface_t *clone;
-    cairo_status_t status;
+    cairo_surface_t *clone;
+    cairo_surface_type_t stype;
+    cairo_int_status_t status;
+    cairo_image_surface_t *image_src;
 
     if (surface->base.status)
 	return surface->base.status;
 
-    if (src->backend == surface->base.backend)
-    {
+    stype = cairo_surface_get_type (src);
+    if (stype == CAIRO_SURFACE_TYPE_GLITZ) {
 	*clone_offset_x = 0;
 	*clone_offset_y = 0;
 	*clone_out = cairo_surface_reference (src);
 
 	return CAIRO_STATUS_SUCCESS;
     }
-    else if (_cairo_surface_is_image (src))
-    {
-	cairo_image_surface_t *image_src = (cairo_image_surface_t *) src;
 
-	clone = (cairo_glitz_surface_t *)
-	    _cairo_glitz_surface_create_similar (surface, src->content,
-						 width, height);
+    /* Check if we can store/use a cached representation as a Glitz surface.  */
+    status = _cairo_glitz_surface_check_cache (surface, src, &clone);
+
+    if (status == CAIRO_STATUS_SUCCESS) {
+	/* When building a cached representation we copy the entire contents
+	   of the image surface.  */
+	image_src = (cairo_image_surface_t *) src;
+	src_x = 0;
+	src_y = 0;
+	width = image_src->width;
+	height = image_src->height;
 	if (clone == NULL)
-	    return CAIRO_INT_STATUS_UNSUPPORTED;
-	if (clone->base.status)
-	    return clone->base.status;
-
-	status = _cairo_glitz_surface_set_image (clone, image_src,
-					         src_x, src_y,
-						 width, height,
-						 0, 0);
-	if (status) {
-	    cairo_surface_destroy (&clone->base);
+	    status = _cairo_glitz_surface_from_image_surface (&clone, src,
+							      abstract_surface,
+							      src_x, src_y,
+							      width, height,
+							      TRUE);
+    } else {
+	void *image_extra;
+	status = _cairo_surface_acquire_source_image (src, &image_src, &image_extra);
+	if (status)
 	    return status;
-	}
 
-	*clone_out = &clone->base;
-	*clone_offset_x = src_x;
-	*clone_offset_y = src_y;
-	return CAIRO_STATUS_SUCCESS;
+        status = _cairo_glitz_surface_from_image_surface (&clone, &image_src->base,
+							  abstract_surface,
+							  src_x, src_y,
+							  width, height, FALSE);
+        _cairo_surface_release_source_image (src, image_src, image_extra);
     }
 
-    return CAIRO_INT_STATUS_UNSUPPORTED;
+    if (status)
+	return status;
+
+    *clone_offset_x = src_x;
+    *clone_offset_y = src_y;
+    *clone_out = clone;
+    return CAIRO_STATUS_SUCCESS;
 }
 
 static void
@@ -1785,22 +1904,8 @@ _cairo_glitz_surface_font_init (cairo_glitz_surface_t *surface,
     cairo_int_status_t		       status;
 
     drawable = glitz_surface_get_drawable (surface->surface);
-
-    switch (format) {
-    case CAIRO_FORMAT_A1:
-    case CAIRO_FORMAT_A8:
-	surface_format =
-	    glitz_find_standard_format (drawable, GLITZ_STANDARD_A8);
-	break;
-    case CAIRO_FORMAT_RGB24:
-	ASSERT_NOT_REACHED;
-	break;
-    case CAIRO_FORMAT_ARGB32:
-	surface_format =
-	    glitz_find_standard_format (drawable, GLITZ_STANDARD_ARGB32);
-    default:
-	break;
-    }
+    assert (format != CAIRO_FORMAT_RGB24);
+    surface_format = _glitz_find_format_for_cairo_format (drawable, format);
 
     if (!surface_format)
 	return CAIRO_INT_STATUS_UNSUPPORTED;
