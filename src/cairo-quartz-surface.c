@@ -685,9 +685,12 @@ CreateGradientFunction (cairo_gradient_pattern_t *gpat)
     float input_value_range[2] = { 0.f, 1.f };
     float output_value_ranges[8] = { 0.f, 1.f, 0.f, 1.f, 0.f, 1.f, 0.f, 1.f };
     CGFunctionCallbacks callbacks = {
-	0, ComputeGradientValue, (CGFunctionReleaseInfoCallback) cairo_pattern_destroy
+	0, ComputeGradientValue, 0
     };
 
+    /* The returned CGFunction will always be torn down before the caller returns,
+       so we do not need to keep the reference count of gpat (also because the
+       pattern might be allocated on stack).  */
     return CGFunctionCreate (gpat,
 			     1,
 			     input_value_range,
@@ -705,7 +708,7 @@ CreateRepeatingGradientFunction (cairo_quartz_surface_t *surface,
     float input_value_range[2];
     float output_value_ranges[8] = { 0.f, 1.f, 0.f, 1.f, 0.f, 1.f, 0.f, 1.f };
     CGFunctionCallbacks callbacks = {
-	0, ComputeGradientValue, (CGFunctionReleaseInfoCallback) cairo_pattern_destroy
+	0, ComputeGradientValue, 0
     };
 
     CGPoint mstart, mend;
