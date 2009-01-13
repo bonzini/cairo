@@ -91,20 +91,6 @@ ifeq ($(CAIRO_HAS_QUARTZ_FONT),1)
 enabled_cairo_pkgconf += cairo-quartz-font.pc
 endif
 
-unsupported_cairo_headers += $(cairo_quartz_image_headers)
-all_cairo_headers += $(cairo_quartz_image_headers)
-all_cairo_private += $(cairo_quartz_image_private)
-all_cairo_sources += $(cairo_quartz_image_sources)
-ifeq ($(CAIRO_HAS_QUARTZ_IMAGE_SURFACE),1)
-enabled_cairo_headers += $(cairo_quartz_image_headers)
-enabled_cairo_private += $(cairo_quartz_image_private)
-enabled_cairo_sources += $(cairo_quartz_image_sources)
-endif
-all_cairo_pkgconf += cairo-quartz-image.pc
-ifeq ($(CAIRO_HAS_QUARTZ_IMAGE_SURFACE),1)
-enabled_cairo_pkgconf += cairo-quartz-image.pc
-endif
-
 supported_cairo_headers += $(cairo_win32_headers)
 all_cairo_headers += $(cairo_win32_headers)
 all_cairo_private += $(cairo_win32_private)

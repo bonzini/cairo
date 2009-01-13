@@ -32,6 +32,10 @@ New experimental backends:
    Simple DirectMedia Layer
    CairoScript
 
+Removed backend:
+
+   Quartz Image
+
 New utility:
 
   cairo-trace
@@ -48,7 +52,9 @@ Test suite overhaul:
 
 Optimisations:
 Tweaks to tessellator, allocations of patterns, delayed initialisation of
-the xlib backend (reduce the cairo overhead of render_bench by ~80%).
+the xlib backend (reduce the cairo overhead of render_bench by ~80%),
+automatic caching of image surfaces in other backends (this means that
+cairo_surface_mark_dirty is _no longer_ a no-op call for image surfaces!).
 
 Bug fixes:
 EXTEND_PAD.

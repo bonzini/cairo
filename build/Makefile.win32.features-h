@@ -20,9 +20,6 @@ endif
 ifeq ($(CAIRO_HAS_QUARTZ_FONT),1)
 	@echo "#define CAIRO_HAS_QUARTZ_FONT 1" >> src/cairo-features.h
 endif
-ifeq ($(CAIRO_HAS_QUARTZ_IMAGE_SURFACE),1)
-	@echo "#define CAIRO_HAS_QUARTZ_IMAGE_SURFACE 1" >> src/cairo-features.h
-endif
 ifeq ($(CAIRO_HAS_WIN32_SURFACE),1)
 	@echo "#define CAIRO_HAS_WIN32_SURFACE 1" >> src/cairo-features.h
 endif

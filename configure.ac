@@ -98,10 +98,6 @@ CAIRO_ENABLE_FONT_BACKEND(quartz_font, Quartz, auto, [
   use_quartz_font=$use_quartz
 ])
 
-CAIRO_ENABLE_SURFACE_BACKEND(quartz_image, Quartz Image, no, [
-  use_quartz_image=$use_quartz
-])
-
 dnl ===========================================================================
 
 CAIRO_ENABLE_SURFACE_BACKEND(win32, Microsoft Windows, auto, [

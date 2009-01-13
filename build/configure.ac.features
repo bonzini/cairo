@@ -364,7 +364,6 @@ AC_DEFUN([CAIRO_REPORT],
 	echo "  Xlib:          $use_xlib"
 	echo "  Xlib Xrender:  $use_xlib_xrender"
 	echo "  Quartz:        $use_quartz"
-	echo "  Quartz-image:  $use_quartz_image"
 	echo "  XCB:           $use_xcb"
 	echo "  Win32:         $use_win32"
 	echo "  OS2:           $use_os2"

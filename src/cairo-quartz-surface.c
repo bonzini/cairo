@@ -165,7 +165,7 @@ static void quartz_ensure_symbols(void)
     _cairo_quartz_symbol_lookup_done = TRUE;
 }
 
-CGImageRef
+static CGImageRef
 _cairo_quartz_create_cgimage (cairo_format_t format,
 			      unsigned int width,
 			      unsigned int height,
@@ -268,7 +268,7 @@ _cairo_quartz_is_cgcontext_bitmap_context (CGContextRef cgc) {
 #define CG_MAX_WIDTH    USHRT_MAX
 
 /* is the desired size of the surface within bounds? */
-cairo_bool_t
+static cairo_bool_t
 _cairo_quartz_verify_surface_size(int width, int height)
 {
     /* hmmm, allow width, height == 0 ? */
@@ -815,12 +815,6 @@ _cairo_surface_to_cgimage (cairo_surface_t *source,
     cairo_image_surface_t *isurf;
     CGImageRef image;
 
-    if (stype == CAIRO_SURFACE_TYPE_QUARTZ_IMAGE) {
-	cairo_quartz_image_surface_t *surface = (cairo_quartz_image_surface_t *) source;
-	*image_out = CGImageRetain (surface->image);
-	return CAIRO_STATUS_SUCCESS;
-    }
-
     if (stype == CAIRO_SURFACE_TYPE_QUARTZ) {
 	cairo_quartz_surface_t *surface = (cairo_quartz_surface_t *) source;
 	if (IS_EMPTY(surface)) {
@@ -960,9 +954,7 @@ _cairo_quartz_cairo_repeating_surface_pattern_to_quartz (cairo_quartz_surface_t 
      * Otherwise, the underlying data store may disappear from under us!
      *
      * _cairo_surface_to_cgimage will copy when it converts non-Quartz surfaces,
-     * since the Quartz surfaces have a higher chance of sticking around.  If the
-     * source is a quartz image surface, then it's set up to retain a ref to the
-     * image surface that it's backed by.
+     * since the Quartz surfaces have a higher chance of sticking around.
      */
     info->image = image;
     info->imageBounds = CGRectMake (0, 0, extents.width, extents.height);
